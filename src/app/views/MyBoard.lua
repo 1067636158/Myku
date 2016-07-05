@@ -25,23 +25,23 @@ function Board:ctor(levelData)
     math.randomseed( tostring(os.time()):reverse():sub(1,6) )
     -- create board, place all coins
     if self.cols >= 8 then
-        local SCALE = ( 640 / self.cols ) / 100
-        local NODE_PADDING2 = math.floor(NODE_PADDING * SCALE)
-        local offsetX = -math.floor(NODE_PADDING2 * self.cols / 2 ) - NODE_PADDING2 / 2 
-        local offsetY = -math.floor(NODE_PADDING2 * self.rows / 2 ) - NODE_PADDING2 / 2 
+        self.SCALE = ( 640 / self.cols ) / 100
+        local NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
+        self.offsetX = -math.floor(NODE_PADDING2 * self.cols / 2 ) - NODE_PADDING2 / 2 
+        self.offsetY = -math.floor(NODE_PADDING2 * self.rows / 2 ) - NODE_PADDING2 / 2 
         for row = 1, self.rows do
-            local y = row * NODE_PADDING2 + offsetY
+            local y = row * NODE_PADDING2 + self.offsetY
             for col = 1, self.cols do
-                local x = col * NODE_PADDING2 + offsetX
+                local x = col * NODE_PADDING2 + self.offsetX
                 local nodeSprite = display.newSprite("#BoardNode.png", x, y)
-                nodeSprite:setScale(SCALE)
+                nodeSprite:setScale(self.SCALE)
                 self.batch:addChild(nodeSprite, NODE_ZORDER)
 
                 local node = self.grid[row][col]
                 if node ~= Levels.NODE_IS_EMPTY then
                     local coin = Coin.new(node)
                     coin:setPosition(x, y)
-                    coin:setScale(SCALE)
+                    coin:setScale(self.SCALE)
                     coin.row = row
                     coin.col = col
                     self.grid[row][col] = coin
