@@ -36,7 +36,7 @@ function Board:ctor(levelData)
     math.randomseed( tostring(os.time()):reverse():sub(1,6) )
     -- create board, place all coins
     if self.cols >= 8 then
-        self.SCALE = ( 640 / self.cols ) / 200
+        self.SCALE = ( 640 / self.cols ) / 100
         local NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
         self.offsetX = -math.floor(NODE_PADDING2 * self.cols / 2 ) - NODE_PADDING2 / 2 
         self.offsetY = -math.floor(NODE_PADDING2 * self.rows / 2 ) - NODE_PADDING2 / 2 
@@ -96,9 +96,10 @@ function Board:ctor(levelData)
     self:addNodeEventListener(cc.NODE_TOUCH_EVENT, function(event)
         return self:onTouch(event.name, event.x, event.y)
     end)
-    self:CheckAll()
-    self:changeSingedCell()
     
+    while self:CheckAll() do
+        self:changeSingedCell()
+    end
 end
 function Board:CheckAll( )
     -- body
@@ -107,6 +108,12 @@ function Board:CheckAll( )
        self:findStars(v)
 
     end
+    for i,v in pairs (self.coins) do
+        if v.isNeedClean  then
+            return true
+        end
+    end
+    return false
 end
 
 function Board:checkLevelCompleted(onAnimationComplete)
