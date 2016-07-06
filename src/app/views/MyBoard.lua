@@ -17,7 +17,18 @@ function Board:ctor(levelData)
     self.batch:setPosition(display.cx, display.cy)
     self:addChild(self.batch)
 
-    self.grid = clone(levelData.grid)
+    self.grid = {}
+
+    --多加上一个屏幕的缓冲格子
+    for i=1,levelData.rows * 2 do
+        self.grid[i] = {}
+        if levelData.grid[i] == nil then
+            levelData.grid[i] = {}
+        end
+        for j=1,levelData.cols do
+            self.grid[i][j] = levelData.grid[i][j]
+        end
+    end
     self.rows = levelData.rows
     self.cols = levelData.cols
     self.coins = {}
@@ -52,12 +63,13 @@ function Board:ctor(levelData)
             end
         end
     else
-        local offsetX = -math.floor(NODE_PADDING * self.cols / 2) - NODE_PADDING / 2
-        local offsetY = -math.floor(NODE_PADDING * self.rows / 2) - NODE_PADDING / 2
+        self.SCALE = 1.0
+        self.offsetX = -math.floor(NODE_PADDING * self.cols / 2) - NODE_PADDING / 2
+        self.offsetY = -math.floor(NODE_PADDING * self.rows / 2) - NODE_PADDING / 2
         for row = 1, self.rows do
-            local y = row * NODE_PADDING + offsetY
+            local y = row * NODE_PADDING + self.offsetY
             for col = 1, self.cols do
-                local x = col * NODE_PADDING + offsetX
+                local x = col * NODE_PADDING + self.offsetX
                 local nodeSprite = display.newSprite("#BoardNode.png", x, y)
                 self.batch:addChild(nodeSprite, NODE_ZORDER)
 
@@ -130,7 +142,7 @@ function Board:checkAll()
     end
 end    
 
-function Board:checkLevelCompleted()
+function Board:checkLevelCompleted(onAnimationComplete)
     local count = 0
     for _, coin in ipairs(self.coins) do
         if coin.isWhite then count = count + 1 end
@@ -213,10 +225,38 @@ function Board:findStars(coin)
 end 
 function Board:changeSingedCell()
     local sum = 0
-    for _ ,v in ipairs(self.coins) do
+    local DropList = {}
+    for i ,v in ipairs(self.coins) do
         if v.isNeedClean then
             sum = sum +1
-            print("aaaaaaaa")
+            local drop_pad = 0
+            local row = v.row
+            local col = v.col
+            local x = col * NODE_PADDING *self.SCALE + self.offsetX
+            local y = (self.rows + 1)* NODE_PADDING * self.SCALE+ self.offsetY
+            for _,v in pairs(DropList) do
+                if col == v.col then
+                    drop_pad = drop_pad + 1
+                    y = y + NODE_PADDING * self.SCALE
+                end
+            end
+      
+            local coin = Coin.new()
+            DropList [#DropList + 1] = coin
+            coin.isNeedClean = false
+            coin:setPosition(x, y)
+            coin:setScale(self.SCALE)
+            coin.row = self.rows + drop_pad
+            coin.col = col
+            self.grid[self.rows + drop_pad][col] = coin
+            if onAnimationComplete == nil then
+                self.batch:removeChild(v, true)
+                self.grid[row][col] = nil
+            else
+            end
+            self.coins[i] = coin
+            self.batch:addChild(coin, COIN_ZORDER)
+
         end
     end
 end   
@@ -226,7 +266,6 @@ function Board:checkLevelCompleted()
         if coin.isWhite then count = count + 1 end
     end
     if count == #self.coins then
-        -- completed
         self:setTouchEnabled(false)
         self:dispatchEvent({name = "LEVEL_COMPLETED"})
     end
