@@ -36,7 +36,7 @@ function Board:ctor(levelData)
     math.randomseed( tostring(os.time()):reverse():sub(1,6) )
     -- create board, place all coins
     if self.cols >= 8 then
-        self.SCALE = ( 640 / self.cols ) / 100
+        self.SCALE = ( 640 / self.cols ) / 200
         local NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
         self.offsetX = -math.floor(NODE_PADDING2 * self.cols / 2 ) - NODE_PADDING2 / 2 
         self.offsetY = -math.floor(NODE_PADDING2 * self.rows / 2 ) - NODE_PADDING2 / 2 
@@ -89,58 +89,25 @@ function Board:ctor(levelData)
         end
     end    
     print("lalala")
-    for _ ,v in ipairs(self.coins) do
-       -- printf("%d----%d*****%d", coin.row,coin.col,coin.nodeType)
-       self:findStars(v)
-
-    end
+   
     
     self:setNodeEventEnabled(true)
     self:setTouchEnabled(true)
     self:addNodeEventListener(cc.NODE_TOUCH_EVENT, function(event)
         return self:onTouch(event.name, event.x, event.y)
     end)
+    self:CheckAll()
     self:changeSingedCell()
-    -- self:checkAll()
+    
 end
- 
-function Board:checkAll()
-    local listH = {}
-    local listV = {}
-    for i=1 ,self.rows do
-        for j=1,self.cols do
+function Board:CheckAll( )
+    -- body
+    for _ ,v in ipairs(self.coins) do
+       -- printf("%d----%d*****%d", coin.row,coin.col,coin.nodeType)
+       self:findStars(v)
 
-            if self.grid[i][j+1] and self.grid[i][j].nodeType == self.grid[i][j+1].nodeType then
-                listH[#listH+1] = self.grid[i][j]   
-            elseif #listH < 2 then   
-                listH={}--todo
-            else
-                print("find a 3 coup H cell")
-                printf("geshu---%d",#listH)
-                print("hang",i)
-                listH = {}--todo
-            end
-        end
     end
-    for k=1,self.cols do
-        for m=1 ,self.rows do
-            if self.grid[m+1] and self.grid[m+1][k] then
-                if self.grid[m][k].nodeType == self.grid[m+1][k].nodeType  then
-                    listV[#listV+1] = self.grid[m][k]   
-                elseif #listV < 2 then   
-                    listV={}
-                else
-                    print("find a 3 coup V cell")
-                    printf("geshu---%d",#listV)
-                    print("lie",k,"hang",m)
-                    listV = {}--todo
-                end
-            
-            end
-            
-        end
-    end
-end    
+end
 
 function Board:checkLevelCompleted(onAnimationComplete)
     local count = 0
@@ -161,7 +128,7 @@ function Board:findStars(coin)
     local i=coin.col
     while i > 1 do
         i = i -1
-        local coin_left = self.grid[coin.row][i]
+        local coin_left = self:getCoin(coin.row,i)
         if coin_left then
             if coin.nodeType == coin_left.nodeType then
                 listH [#listH + 1] = coin_left
@@ -172,7 +139,7 @@ function Board:findStars(coin)
     end
     if coin.col ~= self.cols then
         for j=coin.col+1 , self.cols do
-            local coin_right = self.grid[coin.row][j]
+            local coin_right = self:getCoin(coin.row,j)
             if coin_right then
                 if coin.nodeType == coin_right.nodeType then
                     listH [#listH + 1] = coin_right
@@ -193,7 +160,7 @@ function Board:findStars(coin)
     local k=coin.row
     while k > 1 do
         k = k -1
-        local coin_down = self.grid[k][coin.col]
+        local coin_down = self:getCoin(k,coin.col)
         if coin_down then
             if coin.nodeType == coin_down.nodeType then
                 listV [#listV + 1] = coin_down
@@ -204,7 +171,7 @@ function Board:findStars(coin)
     end
     if coin.row ~= self.rows then
         for o=coin.row+1 , self.rows do
-            local coin_up = self.grid[o][coin.col]
+            local coin_up = self:getCoin(o,coin.col)
             if coin_up then
                 if coin.nodeType == coin_up.nodeType then
                     listV [#listV + 1] = coin_up
@@ -226,23 +193,33 @@ end
 function Board:changeSingedCell()
     local sum = 0
     local DropList = {}
+    local DropHigh = {}
     for i ,v in ipairs(self.coins) do
         if v.isNeedClean then
             sum = sum +1
-            local drop_pad = 0
+            local drop_pad = 1
             local row = v.row
             local col = v.col
             local x = col * NODE_PADDING *self.SCALE + self.offsetX
             local y = (self.rows + 1)* NODE_PADDING * self.SCALE+ self.offsetY
-            for _,v in pairs(DropList) do
+            for i,v in pairs(DropList) do
                 if col == v.col then
                     drop_pad = drop_pad + 1
                     y = y + NODE_PADDING * self.SCALE
+
                 end
             end
-      
+            
+            for i,k in pairs(DropHigh) do
+               if col == k.col then
+                   
+                    table.remove(DropHigh,i)
+                    
+                end
+            end
             local coin = Coin.new()
             DropList [#DropList + 1] = coin
+            DropHigh [#DropHigh + 1] = coin
             coin.isNeedClean = false
             coin:setPosition(x, y)
             coin:setScale(self.SCALE)
@@ -256,10 +233,63 @@ function Board:changeSingedCell()
             end
             self.coins[i] = coin
             self.batch:addChild(coin, COIN_ZORDER)
+            
 
+
+        end 
+    end
+    print(#DropHigh)
+    for k,v in pairs(DropHigh) do
+        print(v.row," ",v.col)
+        if v then
+            local c = v.row
+            local j =1
+            while j<=self.rows do
+                if self.grid[j][v.col]==nil then
+                    local k=j
+                    while k<c+1 do
+                        self:swap(k,v.col,k+1,v.col)
+                        k = k + 1
+                        --todo
+                    end
+                    j = j - 1
+                    --todo
+                end
+                j = j + 1
+                --todo
+            end
         end
+        print(v.row," mm ",v.col)
+    end
+    if onAnimationComplete == nil then
+        for i=1,self.rows do
+            for j=1,self.cols do
+                local y = i * NODE_PADDING *self.SCALE+ self.offsetY
+                local x = j * NODE_PADDING *self.SCALE+ self.offsetX
+                if self.grid[i][j] then
+                    self.grid[i][j]:setPosition(x,y)
+                end
+            end
+        end
+    else
+        --
     end
 end   
+function Board:swap(row1,col1,row2,col2)
+    local temp
+    if self.grid[row1][col1] then
+        self.grid[row1][col1].row = row2
+        self.grid[row1][col1].col = col2
+    end
+    if self.grid[row2][col2] then
+        self.grid[row2][col2].row = row1
+        self.grid[row2][col2].col = col2
+    end
+    
+    temp = self.grid[row1][col1] 
+    self.grid[row1][col1] = self.grid[row2][col2]
+    self.grid[row2][col2] = temp
+end
 function Board:checkLevelCompleted()
     local count = 0
     for _, coin in ipairs(self.coins) do
@@ -327,3 +357,40 @@ function Board:onExit()
 end
 
 return Board
+-- function Board:checkAllStar()
+--     local listH = {}
+--     local listV = {}
+--     for i=1 ,self.rows do
+--         for j=1,self.cols do
+
+--             if self.grid[i][j+1] and self.grid[i][j].nodeType == self.grid[i][j+1].nodeType then
+--                 listH[#listH+1] = self.grid[i][j]   
+--             elseif #listH < 2 then   
+--                 listH={}--todo
+--             else
+--                 print("find a 3 coup H cell")
+--                 printf("geshu---%d",#listH)
+--                 print("hang",i)
+--                 listH = {}--todo
+--             end
+--         end
+--     end
+--     for k=1,self.cols do
+--         for m=1 ,self.rows do
+--             if self.grid[m+1] and self.grid[m+1][k] then
+--                 if self.grid[m][k].nodeType == self.grid[m+1][k].nodeType  then
+--                     listV[#listV+1] = self.grid[m][k]   
+--                 elseif #listV < 2 then   
+--                     listV={}
+--                 else
+--                     print("find a 3 coup V cell")
+--                     printf("geshu---%d",#listV)
+--                     print("lie",k,"hang",m)
+--                     listV = {}--todo
+--                 end
+            
+--             end
+            
+--         end
+--     end
+-- end    
