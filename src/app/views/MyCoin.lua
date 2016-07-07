@@ -18,6 +18,7 @@ local Coin = class("Coin", function(nodeType)
     
     local sprite = display.newSprite(string.format(starsBox[index]))
           sprite.nodeType=index
+          sprite.isNeedClean=false
     return sprite
 end)
 

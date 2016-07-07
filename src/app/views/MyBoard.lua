@@ -7,7 +7,8 @@ end)
 
 local NODE_PADDING   = 100
 local NODE_ZORDER    = 0
-
+local  curSwapBeginRow = -1
+local  curSwapBeginCol = -1
 local COIN_ZORDER    = 1000
 
 function Board:ctor(levelData)
@@ -282,20 +283,51 @@ function Board:changeSingedCell()
         --
     end
 end   
-function Board:swap(row1,col1,row2,col2)
-    local temp
-    if self.grid[row1][col1] then
-        self.grid[row1][col1].row = row2
-        self.grid[row1][col1].col = col2
+function Board:swap(row1,col1,row2,col2,callBack)
+   local swap = function(row1_,col1_,row2_,col2_)
+        local temp
+        if self:getCoin(row1_,col1_) then
+            self.grid[row1_][col1_].row = row2
+            self.grid[row1_][col1_].col = col2
+        end
+        if self:getCoin(row2_,col2_) then
+            self.grid[row2_][col2_].row = row1
+            self.grid[row2_][col2_].col = col1
+        end
+        temp = self.grid[row1_][col1_] 
+        if self.grid[row2_] and  self.grid[row2_][col2_] then
+            self.grid[row1_][col1_] = self.grid[row2_][col2_]
+            self.grid[row2_][col2_] = temp
+        end
     end
-    if self.grid[row2][col2] then
-        self.grid[row2][col2].row = row1
-        self.grid[row2][col2].col = col2
+    if callBack == nil then
+        swap(row1,col1,row2,col2)
+        return
     end
+    if self:getCoin(row1,col1) == nil or self:getCoin(row2,col2) == nil then
+        print("have one nil value with the swap function!!!!")
+        return
+    end
+
+    local X1,Y1 = col1 * NODE_PADDING * self.SCALE + self.offsetX , row1  * NODE_PADDING * self.SCALE + self.offsetY
+    local X2,Y2 = col2 * NODE_PADDING * self.SCALE + self.offsetX , row2  * NODE_PADDING * self.SCALE + self.offsetY
+    local moveTime = 0.6 
     
-    temp = self.grid[row1][col1] 
-    self.grid[row1][col1] = self.grid[row2][col2]
-    self.grid[row2][col2] = temp
+    if callBack then
+        --改动锚点的渲染前后顺序，移动时前置
+        self.grid[row2][col2]:setLocalZOrder(COIN_ZORDER + 1)
+        self.grid[row1][col1]:runAction(transition.sequence({
+                cc.MoveTo:create(moveTime, cc.p(X2,Y2)),
+                cc.CallFunc:create(function()
+                    --改动锚点的渲染前后顺序，移动完成后回归原本zorder
+                    self.grid[row2][col2]:setLocalZOrder(COIN_ZORDER)
+                    self:swap(row1,col1,row2,col2)
+                    callBack()
+                end)
+            }))
+        self.grid[row2][col2]:runAction(cc.MoveTo:create(moveTime, cc.p(X1,Y1)))
+    else
+    end
 end
 function Board:checkLevelCompleted()
     local count = 0
@@ -338,9 +370,24 @@ function Board:flipCoin(coin, includeNeighbour)
 end
 
 function Board:onTouch(event, x, y)
-    if event ~= "began" or self.flipAnimationCount > 0 then return end
-
-    local padding = NODE_PADDING / 2
+    if event == "began" then
+        local row,col = self:getRandC(x, y)
+        print(row,col)
+        if curSwapBeginRow>0 or curSwapBeginCol>0 then
+            self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+        end)--todo
+        end
+    elseif event == "ended" then
+        local row,col = self:getRandC(x, y)
+        print(row,col)
+        curSwapBeginRow = row
+        curSwapBeginCol = col
+        
+    end
+    return true
+end
+function Board:getRandC(x,y)
+    local padding = (NODE_PADDING * self.SCALE) / 2
     for _, coin in ipairs(self.coins) do
         local cx, cy = coin:getPosition()
         cx = cx + display.cx
@@ -349,12 +396,11 @@ function Board:onTouch(event, x, y)
             and x <= cx + padding
             and y >= cy - padding
             and y <= cy + padding then
-            --self:flipCoin(coin, true)
-            break
+            return coin.row , coin.col
         end
     end
+    return -1 , -1
 end
-
 function Board:onEnter()
     self:setTouchEnabled(true)
 end
