@@ -46,20 +46,23 @@ function Board:ctor(levelData)
         NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
         self.offsetX = -math.floor(NODE_PADDING2 * self.cols / 2 ) - NODE_PADDING2 / 2 
         self.offsetY = -math.floor(NODE_PADDING2 * self.rows / 2 ) - NODE_PADDING2 / 2 
-        for row = 1, self.rows do
+    else
+        self.SCALE = 1.0
+        NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
+        self.offsetX = -math.floor(NODE_PADDING2 * self.cols / 2) - NODE_PADDING2 / 2
+        self.offsetY = -math.floor(NODE_PADDING2 * self.rows / 2) - NODE_PADDING2 / 2 
+    end   
+    for row = 1, self.rows do
             local y = row * NODE_PADDING2 + self.offsetY
             for col = 1, self.cols do
                 local x = col * NODE_PADDING2 + self.offsetX
                 local nodeSprite = display.newSprite("#BoardNode.png", x, y)
                 nodeSprite:setScale(self.SCALE)
                 self.batch:addChild(nodeSprite, NODE_ZORDER)
-
                 local node = self.grid[row][col]
                 if node ~= Levels.NODE_IS_EMPTY then
                     local coin = Coin.new(node)
                     coin.isNeedClean = false
-                    coin:setPosition(x, y)
-                    coin:setScale(self.SCALE)
                     coin.row = row
                     coin.col = col
                     self.grid[row][col] = coin
@@ -68,38 +71,10 @@ function Board:ctor(levelData)
                     --printf("%d----%d*****%d", coin.row,coin.col,coin.nodeType)
                 end
             end
-        end
-    else
-        self.SCALE = 1.0
-        NODE_PADDING2 = math.floor(NODE_PADDING * self.SCALE)
-        self.offsetX = -math.floor(NODE_PADDING * self.cols / 2) - NODE_PADDING / 2
-        self.offsetY = -math.floor(NODE_PADDING * self.rows / 2) - NODE_PADDING / 2
-        for row = 1, self.rows do
-            local y = row * NODE_PADDING + self.offsetY
-            for col = 1, self.cols do
-                local x = col * NODE_PADDING + self.offsetX
-                local nodeSprite = display.newSprite("#BoardNode.png", x, y)
-                self.batch:addChild(nodeSprite, NODE_ZORDER)
-
-                local node = self.grid[row][col]
-                if node ~= Levels.NODE_IS_EMPTY then
-                    local coin = Coin.new(node)
-                    coin:setPosition(x, y)
-                    coin.isNeedClean = false
-                    coin.row = row
-                    coin.col = col
-                    self.grid[row][col] = coin
-                    self.coins[#self.coins + 1] = coin
-                    self.batch:addChild(coin, COIN_ZORDER)
-                    --printf("%d----%d*****%d", coin.row,coin.col,coin.nodeType)
-                 
-                end
-            end
-        end
-    end    
+        end 
     print("lalala")
    
-    
+    self:lined()
     self:setNodeEventEnabled(true)
     self:setTouchEnabled(true)
     self:addNodeEventListener(cc.NODE_TOUCH_EVENT, function(event)
@@ -108,6 +83,17 @@ function Board:ctor(levelData)
     
     while self:CheckAll() do
         self:changeSingedCell()
+    end
+end
+function Board:lined(  )
+    for row = 1, self.rows do
+        local y = row * NODE_PADDING* self.SCALE + self.offsetY
+        for col = 1, self.cols do
+            local x = col * NODE_PADDING* self.SCALE + self.offsetX
+            coin = self.grid[row][col]
+            coin:setPosition(x, y)
+            coin:setScale(self.SCALE)
+        end
     end
 end
 function Board:CheckAll( )
@@ -289,27 +275,24 @@ function Board:changeSingedCell(onAnimationComplete)
         print(v.row," mm ",v.col)
     end
     if onAnimationComplete == nil then
-        for i=1,self.rows do
-            for j=1,self.cols do
-                local y = i * NODE_PADDING *self.SCALE+ self.offsetY
-                local x = j * NODE_PADDING *self.SCALE+ self.offsetX
-                if self.grid[i][j] then
-                    self.grid[i][j]:setPosition(x,y)
-                end
-            end
-        end
+        self:lined()
     else
         for i=1,self.rows do
-            for j=1,self.cols do
-                local y = i * NODE_PADDING*self.SCALE + self.offsetY
-                local x = j * NODE_PADDING*self.SCALE + self.offsetX
-                local coin_t = self.grid[i][j]
+            for j ,v in pairs(DropHigh) do
+                local y = i * NODE_PADDING * self.SCALE + self.offsetY
+                local x = v.col * NODE_PADDING * self.SCALE + self.offsetX
+                local coin_t = self.grid[i][v.col]
+                local x_t,y_t = coin_t:getPosition()
                 if coin_t then
-                    coin_t:runAction(transition.sequence({
-                        cc.DelayTime:create(0.2),
-                        cc.MoveTo:create(0.9, cc.p(x, y))
-                    }))
+                    local x_t,y_t = coin_t:getPosition()
+                    if(math.abs(y_t - y) > NODE_PADDING/2 ) then
+                        coin_t:runAction(transition.sequence({
+                            cc.DelayTime:create(0.2),
+                            cc.MoveTo:create(0.9, cc.p(x, y))
+                        }))
+                    end
                 end
+                
             end
         end
         print("init2")
@@ -322,7 +305,7 @@ function Board:changeSingedCell(onAnimationComplete)
         end, 1.23 , false)--
     end
 end   
-function Board:swap(row1,col1,row2,col2,callBack)
+function Board:swap(row1,col1,row2,col2,callBack,timeScale)
    local swap = function(row1_,col1_,row2_,col2_)
         local temp
         if self:getCoin(row1_,col1_) then
@@ -343,6 +326,7 @@ function Board:swap(row1,col1,row2,col2,callBack)
         swap(row1,col1,row2,col2)
         return
     end
+
     if self:getCoin(row1,col1) == nil or self:getCoin(row2,col2) == nil then
         print("have one nil value with the swap function!!!!")
         return
@@ -351,7 +335,9 @@ function Board:swap(row1,col1,row2,col2,callBack)
     local X1,Y1 = col1 * NODE_PADDING * self.SCALE + self.offsetX , row1  * NODE_PADDING * self.SCALE + self.offsetY
     local X2,Y2 = col2 * NODE_PADDING * self.SCALE + self.offsetX , row2  * NODE_PADDING * self.SCALE + self.offsetY
     local moveTime = 0.6 
-    
+    if timeScale then
+        moveTime = moveTime * timeScale
+    end
     if callBack then
         -- print(isCanSwap)
         -- print("dddd")
@@ -493,7 +479,7 @@ function Board:onTouch( event , x, y)
                         else
                             self:swap(curSwapBeginRow,curSwapBeginCol,row,col,function()
                                 
-                                end)
+                                end,0.6)
                         end
                     end)
             else
