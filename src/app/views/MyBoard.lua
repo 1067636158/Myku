@@ -10,6 +10,11 @@ local NODE_ZORDER    = 0
 local  curSwapBeginRow = -1
 local  curSwapBeginCol = -1
 local COIN_ZORDER    = 1000
+local isInTouch = false
+local isEnableTouch = true
+local isOnTouch = true
+local scheduler = cc.Director:getInstance():getScheduler()
+--isCanSwap = nil
 
 function Board:ctor(levelData)
     cc.GameObject.extend(self):addComponent("components.behavior.EventProtocol"):exportMethods()
@@ -52,6 +57,7 @@ function Board:ctor(levelData)
                 local node = self.grid[row][col]
                 if node ~= Levels.NODE_IS_EMPTY then
                     local coin = Coin.new(node)
+                    coin.isNeedClean = false
                     coin:setPosition(x, y)
                     coin:setScale(self.SCALE)
                     coin.row = row
@@ -78,6 +84,7 @@ function Board:ctor(levelData)
                 if node ~= Levels.NODE_IS_EMPTY then
                     local coin = Coin.new(node)
                     coin:setPosition(x, y)
+                    coin.isNeedClean = false
                     coin.row = row
                     coin.col = col
                     self.grid[row][col] = coin
@@ -109,7 +116,7 @@ function Board:CheckAll( )
        self:findStars(v)
 
     end
-    for i,v in pairs (self.coins) do
+    for _,v in ipairs (self.coins) do
         if v.isNeedClean  then
             return true
         end
@@ -160,7 +167,7 @@ function Board:findStars(coin)
     if #listH < 3 then
         listH = {}
     else
-        for i,v in pairs(listH) do
+        for i,v in ipairs(listH) do
             v.isNeedClean = true
         end
         listH = {}
@@ -192,13 +199,13 @@ function Board:findStars(coin)
     if #listV < 3 then
         listV = {}
     else
-        for i,v in pairs(listV) do
+        for i,v in ipairs(listV) do
             v.isNeedClean = true
         end
         listV = {}
     end
 end 
-function Board:changeSingedCell()
+function Board:changeSingedCell(onAnimationComplete)
     local sum = 0
     local DropList = {}
     local DropHigh = {}
@@ -226,6 +233,11 @@ function Board:changeSingedCell()
                 end
             end
             local coin = Coin.new()
+             if onAnimationComplete == nil then
+                coin = Coin.new()
+            else
+                coin = Coin.new()
+            end
             DropList [#DropList + 1] = coin
             DropHigh [#DropHigh + 1] = coin
             coin.isNeedClean = false
@@ -238,6 +250,8 @@ function Board:changeSingedCell()
                 self.batch:removeChild(v, true)
                 self.grid[row][col] = nil
             else
+                self.batch:removeChild(self.grid[row][col], true)
+                self.grid[row][col] = nil
             end
             self.coins[i] = coin
             self.batch:addChild(coin, COIN_ZORDER)
@@ -280,7 +294,27 @@ function Board:changeSingedCell()
             end
         end
     else
-        --
+        for i=1,self.rows do
+            for j=1,self.cols do
+                local y = i * NODE_PADDING*self.SCALE + self.offsetY
+                local x = j * NODE_PADDING*self.SCALE + self.offsetX
+                local coin_t = self.grid[i][j]
+                if coin_t then
+                    coin_t:runAction(transition.sequence({
+                        cc.DelayTime:create(0.2),
+                        cc.MoveTo:create(0.9, cc.p(x, y))
+                    }))
+                end
+            end
+        end
+        print("init2")
+        self.handle  = scheduler:scheduleScriptFunc (function () 
+            scheduler:unscheduleScriptEntry(self.handle )
+            print("init")
+            if self:CheckAll() then
+                self:changeSingedCell(function() end)
+            end
+        end, 1.23 , false)--
     end
 end   
 function Board:swap(row1,col1,row2,col2,callBack)
@@ -314,18 +348,30 @@ function Board:swap(row1,col1,row2,col2,callBack)
     local moveTime = 0.6 
     
     if callBack then
-        --改动锚点的渲染前后顺序，移动时前置
-        self.grid[row2][col2]:setLocalZOrder(COIN_ZORDER + 1)
-        self.grid[row1][col1]:runAction(transition.sequence({
+        -- print(isCanSwap)
+        -- print("dddd")
+        -- if isCanSwap == nil then
+            print("dddd")
+            self.grid[row2][col2]:setLocalZOrder(COIN_ZORDER + 1)
+            self.grid[row1][col1]:runAction(transition.sequence({
                 cc.MoveTo:create(moveTime, cc.p(X2,Y2)),
                 cc.CallFunc:create(function()
-                    --改动锚点的渲染前后顺序，移动完成后回归原本zorder
+                        --改动锚点的渲染前后顺序，移动完成后回归原本zorder
                     self.grid[row2][col2]:setLocalZOrder(COIN_ZORDER)
                     self:swap(row1,col1,row2,col2)
+                    isOnTouch = true
                     callBack()
-                end)
-            }))
-        self.grid[row2][col2]:runAction(cc.MoveTo:create(moveTime, cc.p(X1,Y1)))
+                    end)
+                }))
+            self.grid[row2][col2]:runAction(cc.MoveTo:create(moveTime, cc.p(X1,Y1)))
+            
+            -- isCanSwap =1
+            -- print(isCanSwap)
+        -- else
+        --     isCanSwap = nil 
+        --     --todo
+        -- end
+       
     else
     end
 end
@@ -368,24 +414,178 @@ function Board:flipCoin(coin, includeNeighbour)
         end, 0.25)
     end
 end
-
-function Board:onTouch(event, x, y)
+function Board:onTouch( event , x, y)
+    if not isEnableTouch then
+        return
+    end
     if event == "began" then
         local row,col = self:getRandC(x, y)
-        print(row,col)
-        if curSwapBeginRow>0 or curSwapBeginCol>0 then
-            self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
-        end)--todo
-        end
-    elseif event == "ended" then
-        local row,col = self:getRandC(x, y)
-        print(row,col)
         curSwapBeginRow = row
         curSwapBeginCol = col
-        
+        isInTouch = true
+    end
+    if isInTouch and (event == "moved" or event == "ended"  )then
+        local padding = NODE_PADDING* self.SCALE / 2
+        local coin_center = self.grid[curSwapBeginRow][curSwapBeginCol]
+        local cx, cy = coin_center:getPosition()
+        cx = cx + display.cx
+        cy = cy + display.cy
+
+        if event == "ended" then
+            isInTouch = false
+            local p_a = coin_center:getAnchorPoint()
+            local x_a = (0.5 - p_a.x ) *  NODE_PADDING * self.SCALE + curSwapBeginCol * NODE_PADDING * self.SCALE+ self.offsetX
+            local y_a = (0.5 - p_a.y) *  NODE_PADDING * self.SCALE + curSwapBeginRow * NODE_PADDING * self.SCALE+ self.offsetY
+            coin_center:setAnchorPoint(cc.p(0.5,0.5))
+            coin_center:setPosition(cc.p(x_a  , y_a ))
+            isEnableTouch = false
+                coin_center:runAction(
+                    transition.sequence({
+                    cc.MoveTo:create(0.4,cc.p(curSwapBeginCol * NODE_PADDING * self.SCALE
+                     + self.offsetX,curSwapBeginRow * NODE_PADDING * self.SCALE + self.offsetY)),
+                    cc.CallFunc:create(function()
+                          isEnableTouch = true
+                    end)
+                }))
+            coin_center:runAction(cc.ScaleTo:create(0.5,self.SCALE))
+            return true
+        end
+
+        if x < cx - 2*padding
+            or x > cx + 2*padding
+            or y < cy - 2*padding
+            or y > cy + 2*padding then
+            isInTouch = false
+
+            --划归锚点偏移
+            local p_a = coin_center:getAnchorPoint()
+            local x_a = (0.5 - p_a.x ) *  NODE_PADDING* self.SCALE + curSwapBeginCol * NODE_PADDING* self.SCALE + self.offsetX
+            local y_a = (0.5 - p_a.y) *  NODE_PADDING* self.SCALE + curSwapBeginRow * NODE_PADDING* self.SCALE + self.offsetY
+            coin_center:setAnchorPoint(cc.p(0.5,0.5))
+            coin_center:setPosition(cc.p(x_a  , y_a ))
+
+            --进入十字框以内
+            if (x >= cx - padding
+            and x <= cx + padding)
+            or (y >= cy - padding
+            and y <= cy + padding) then
+
+                local row,col = self:getRandC(x, y)
+
+                isEnableTouch = false
+                self:swap(row,col,curSwapBeginRow,curSwapBeginCol,
+                    function()
+                        isEnableTouch = true
+                        print("init3")
+                        if self:CheckAll() then
+                            print("init4")
+                        self:changeSingedCell(true)
+                        end
+                    end
+                    )
+                coin_center:runAction(cc.ScaleTo:create(0.5,self.SCALE))
+            else
+                isEnableTouch = false
+                coin_center:runAction(
+                    transition.sequence({
+                    cc.MoveTo:create(0.4,cc.p(curSwapBeginCol * NODE_PADDING* self.SCALE + 
+                        self.offsetX,curSwapBeginRow * NODE_PADDING* self.SCALE + self.offsetY)),
+                    cc.CallFunc:create(function()
+                          isEnableTouch = true
+                    end)
+                }))
+                coin_center:runAction(cc.ScaleTo:create(0.5,self.SCALE))
+                return true
+            end
+        else
+            x_vec = (cx - x)/ NODE_PADDING* self.SCALE * 0.3 + 0.5
+            y_vec = (cy - y)/ NODE_PADDING* self.SCALE * 0.3 + 0.5
+            coin_center:setAnchorPoint(cc.p(x_vec,y_vec))
+        end
     end
     return true
 end
+-- function Board:onTouch(event, x, y)
+--     if event == "began" then
+--         local row,col = self:getRandC(x, y)
+--         curSwapBeginRow = row
+--         curSwapBeginCol = col
+--         print(row," 11",col)
+        
+--     end
+--     if isOnTouch and event == "ended" then
+--         local padding = NODE_PADDING *self.SCALE 
+--         local coin_center = self.grid[curSwapBeginRow][curSwapBeginCol]
+--         local cx, cy = coin_center:getPosition()
+--         print(x," 33",y)
+--         cx = cx + display.cx
+--         cy = cy + display.cy
+--         print(cx," 44",cy)
+--         isOnTouch = false
+--         if (math.abs(x-cx)>=math.abs(y-cy))then
+--             if (x-cx)>=20 then
+--                 local row,col = self:getRandC(cx+padding, cy)
+--                 print(row," 51",col)
+--                 if row ==-1 then
+--                     row,col=curSwapBeginRow, curSwapBeginCol
+--                 end
+
+--                 self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+--                 end)
+
+--             elseif (x-cx)<=-20 then
+                
+--                 local row,col = self:getRandC(cx-padding, cy)
+--                 print(row," 52",col)
+--                 if row ==-1 then
+--                     row,col=curSwapBeginRow, curSwapBeginCol
+--                 end
+--                 self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+--                 end)
+            
+            
+--             end 
+--         else
+--             if (y-cy)>=20 then
+--                 local row,col = self:getRandC(cx, cy+padding)
+--                 print(row," 53",col)
+--                 if row ==-1 then
+--                     row,col=curSwapBeginRow, curSwapBeginCol
+--                 end
+--                 self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+--                 end)
+--             elseif (y-cy)<=20 then
+                
+--                 local row,col = self:getRandC(cx, cy-padding)
+--                 print(row," 54",col)
+--                 if row ==-1 then
+--                     row,col=curSwapBeginRow, curSwapBeginCol
+--                 end
+--                 self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+--                 end)
+            
+--             end
+--         end
+--     end
+--     return true
+-- end
+-- function Board:onTouch(event, x, y)
+--     if event == "began" then
+--         local row,col = self:getRandC(x, y)
+--         print(row,col)
+--         if curSwapBeginRow>0 or curSwapBeginCol>0 then
+--             self:swap(curSwapBeginRow, curSwapBeginCol, row, col, function()
+--         end)--todo
+--         end
+--     elseif event == "ended" then
+--         local row,col = self:getRandC(x, y)
+--         print(row,col)
+--         curSwapBeginRow = row
+--         curSwapBeginCol = col
+        
+--     end
+--     return true
+-- end
 function Board:getRandC(x,y)
     local padding = (NODE_PADDING * self.SCALE) / 2
     for _, coin in ipairs(self.coins) do
