@@ -31,6 +31,7 @@ GAME_SFX = {
     flipCoin       = "sfx/ConFlipSound.mp3",
     levelCompleted = "sfx/LevelWinSound.mp3",
 }
+GAME_CELL_STAND_SCALE = 0.75
 
 GAME_TEXTURE_DATA_FILENAME  = "AllSprites.plist"
 GAME_TEXTURE_IMAGE_FILENAME = "AllSprites.png"

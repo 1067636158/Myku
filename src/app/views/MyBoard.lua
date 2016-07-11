@@ -7,12 +7,16 @@ end)
 
 local NODE_PADDING   = 100
 local NODE_ZORDER    = 0
+local coin_anim_time = 0.68
 local  curSwapBeginRow = -1
 local  curSwapBeginCol = -1
 local COIN_ZORDER    = 1000
 local isInTouch = false
+local drop_time = 1
 local isEnableTouch = true
 local isOnTouch = true
+local CELL_BIG_SCALE = 1.2
+local helpDis = 8
 local scheduler = cc.Director:getInstance():getScheduler()
 --isCanSwap = nil
 
@@ -61,7 +65,7 @@ function Board:ctor(levelData)
                 self.batch:addChild(nodeSprite, NODE_ZORDER)
                 local node = self.grid[row][col]
                 if node ~= Levels.NODE_IS_EMPTY then
-                    local coin = Coin.new(node)
+                    local coin = Coin.new()
                     coin.isNeedClean = false
                     coin.row = row
                     coin.col = col
@@ -84,6 +88,24 @@ function Board:ctor(levelData)
     while self:CheckAll() do
         self:changeSingedCell()
     end
+    
+    -- self.bigHandel = scheduler:scheduleScriptFunc (function () 
+    --     if isInTouch and isEnableTouch then
+    --         if curSwapBeginRow == -1 or curSwapBeginCol == -1 then
+    --             return
+    --         else
+    --             if self.grid[curSwapBeginRow] and self.grid[curSwapBeginRow][curSwapBeginCol] then
+    --                 local coin_c = self.grid[curSwapBeginRow][curSwapBeginCol] 
+    --                 local sc = coin_c:getScaleX()
+    --                 if sc < CELL_BIG_SCALE * self.SCALE then
+    --                     coin_c:setScale( ( CELL_BIG_SCALE *  self.SCALE - 1.0 ) / 8 +  sc )
+    --                 end
+    --             end
+    --         end
+    --     end
+      
+    -- end , 1.0/60 , false)
+   
 end
 function Board:lined(  )
     for row = 1, self.rows do
@@ -160,6 +182,7 @@ function Board:findStars(coin)
     else
         for i,v in ipairs(listH) do
             v.isNeedClean = true
+            v.cutOrder = i
         end
         listH = {}
     end
@@ -192,11 +215,12 @@ function Board:findStars(coin)
     else
         for i,v in ipairs(listV) do
             v.isNeedClean = true
+            v.cutOrder = i
         end
         listV = {}
     end
 end 
-function Board:changeSingedCell(onAnimationComplete)
+function Board:changeSingedCell(onAnimationComplete,timeScale)
     local sum = 0
     local DropList = {}
     local DropHigh = {}
@@ -224,8 +248,9 @@ function Board:changeSingedCell(onAnimationComplete)
                 end
             end
             local coin = Coin.new()
-             if onAnimationComplete == nil then
-                coin = Coin.new()
+            if onAnimationComplete then
+                coin = Coin.new(coin_anim_time,self.SCALE)
+                print(dddeed)
             else
                 coin = Coin.new()
             end
@@ -237,13 +262,14 @@ function Board:changeSingedCell(onAnimationComplete)
             coin.row = self.rows + drop_pad
             coin.col = col
             self.grid[self.rows + drop_pad][col] = coin
-            if onAnimationComplete == nil then
-                self.batch:removeChild(v, true)
-                self.grid[row][col] = nil
-            else
-                self.batch:removeChild(self.grid[row][col], true)
-                self.grid[row][col] = nil
-            end
+           if onAnimationComplete == nil then
+                    self.batch:removeChild(self.grid[row][col], true)
+                    self.grid[row][col] = nil
+                else
+                    self.grid[row][col]:setLocalZOrder(COIN_ZORDER + 1)
+                    self.grid[row][col]:Explod(self.SCALE,self.grid[row][col].cutOrder )
+                    self.grid[row][col] = nil
+                end
             self.coins[i] = coin
             self.batch:addChild(coin, COIN_ZORDER)
             
@@ -277,6 +303,10 @@ function Board:changeSingedCell(onAnimationComplete)
     if onAnimationComplete == nil then
         self:lined()
     else
+        local timeSc =  1.0
+        if timeScale then
+            timeSc = timeScale
+        end
         for i=1,self.rows do
             for j ,v in pairs(DropHigh) do
                 local y = i * NODE_PADDING * self.SCALE + self.offsetY
@@ -284,8 +314,19 @@ function Board:changeSingedCell(onAnimationComplete)
                 local coin_t = self.grid[i][v.col]
                 local x_t,y_t = coin_t:getPosition()
                 if coin_t then
+
                     local x_t,y_t = coin_t:getPosition()
                     if(math.abs(y_t - y) > NODE_PADDING/2 ) then
+                        print(444)
+                        local rand = math.random(100)/100.0 + 0.4
+                        coin_t:runAction(transition.sequence({
+                            cc.DelayTime:create(coin_anim_time + coin_t.row / self.rows * 0.24  ),
+                            cc.ScaleTo:create(0.3*timeSc, self.SCALE * 1.13, self.SCALE * 0.93 ),
+                            cc.ScaleTo:create(0.5*timeSc, self.SCALE * 0.95, self.SCALE * 1.08 ),
+                            cc.ScaleTo:create(0.6*timeSc, self.SCALE * 1.055, self.SCALE * 0.97 ),
+                            cc.ScaleTo:create(0.8*timeSc, self.SCALE * 1.0, self.SCALE * 1.0 )
+
+                        }))
                         coin_t:runAction(transition.sequence({
                             cc.DelayTime:create(0.2),
                             cc.MoveTo:create(0.9, cc.p(x, y))
@@ -296,13 +337,16 @@ function Board:changeSingedCell(onAnimationComplete)
             end
         end
         print("init2")
-        self.handle  = scheduler:scheduleScriptFunc (function () 
-            scheduler:unscheduleScriptEntry(self.handle )
-            print("init")
-            if self:CheckAll() then
-                self:changeSingedCell(function() end)
-            end
-        end, 1.23 , false)--
+        self:runAction(transition.sequence(
+        {
+            cc.DelayTime:create((coin_anim_time + drop_time)*timeSc),
+            cc.CallFunc:create(function()
+                if self:CheckAll() then
+                    print("find")
+                    self:changeSingedCell(true,0.75)
+                end
+            end)
+        }))
     end
 end   
 function Board:swap(row1,col1,row2,col2,callBack,timeScale)
@@ -475,7 +519,8 @@ function Board:onTouch( event , x, y)
                         self:findStars(self.grid[row][col])
                         self:findStars(self.grid[curSwapBeginRow][curSwapBeginCol])
                         if self:checkNotClean() then
-                            self:changeSingedCell(function() end)
+                            print("asd")
+                            self:changeSingedCell(true)
                         else
                             self:swap(curSwapBeginRow,curSwapBeginCol,row,col,function()
                                 
